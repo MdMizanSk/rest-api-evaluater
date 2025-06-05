@@ -5,6 +5,7 @@ const jsfaker = require('json-schema-faker');
 const swagerParser = require('@apidevtools/swagger-parser');
 const app = express();
 const port = process.env.PORT || 8000;
+const host = '0.0.0.0';
 
 app.use(cors()); 
 app.use(express.json());
@@ -92,6 +93,6 @@ app.post('/api', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-})
+app.listen(port, host, () => {
+  console.log(`Server is running on http://${host}:${port}`);
+});
