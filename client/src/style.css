@@ -9,15 +9,16 @@ body {
 }
 
 .container {
-    width: 90vw;          
-    max-width: 1000px;    
-    height: 80vh;         
-    max-height: 700px;    
     background-color: beige;
-    border-radius: 0.625rem; 
+    border-radius: .625rem;
     box-sizing: border-box;
-    padding: 1rem;        
-    overflow: auto;       
+    height: 108vh;
+    max-height: 897px;
+    max-width: 1000px;
+    overflow: auto;
+    padding: 1rem;
+    width: 90vw;
+    margin: 14vh;       
 }
 
 .input {
