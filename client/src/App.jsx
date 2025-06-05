@@ -12,7 +12,7 @@ function App() {
 
   const handleUrlSubmit = async (swaggerUrl) => {
     try {
-      const response = await axios.post('http://localhost:8000/api', {
+      const response = await axios.post('https://rest-api-evaluater-server.onrender.com/api', {
         url: swaggerUrl,
       });
       setLogs(response.data);
