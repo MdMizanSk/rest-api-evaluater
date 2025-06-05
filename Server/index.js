@@ -4,7 +4,7 @@ const cors = require('cors');
 const jsfaker = require('json-schema-faker');
 const swagerParser = require('@apidevtools/swagger-parser');
 const app = express();
-const port = 8000;
+const port = process.env.PORT || 8000;
 
 app.use(cors()); 
 app.use(express.json());
