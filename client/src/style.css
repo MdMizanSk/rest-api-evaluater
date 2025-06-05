@@ -62,6 +62,7 @@ body {
     height: 12.5rem;
     box-sizing: border-box;
     padding: 0.5rem;
+    overflow: auto;
 }
 
 .response-box {
@@ -69,7 +70,7 @@ body {
     margin: 1.25rem 3.125rem; 
     border-radius: 0.625rem;
     height: 18.75rem; 
-    overflow-y: auto;
+    overflow: auto;
     box-sizing: border-box;
     padding: 0.5rem;
 }
