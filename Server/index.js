@@ -29,7 +29,8 @@ function ensureDummyImageExists() {
 }
 
 app.post('/api', async (req, res) => {
-    const { url } = req.body;
+    const url="https://petstore.swagger.io/v2/swagger.json"; // For testing, you can replace this with req.body.url
+    // const { url } = req.body;
     try {
         const promise = await axios.get(url);
         const rawData = promise.data;
@@ -122,7 +123,7 @@ app.post('/api', async (req, res) => {
                 });
             }
         }
-
+        console.log(result)
         res.json(result);
     } catch (error) {
         console.error('Error fetching Swagger JSON:', error.message);
@@ -131,5 +132,5 @@ app.post('/api', async (req, res) => {
 });
 
 app.listen(port, host, () => {
-    console.log(`Server is running on http://${host}:${port}`);
+    console.log(`Server is running on http://localhost:${port}`);
 });
