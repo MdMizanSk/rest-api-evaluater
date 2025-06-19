@@ -123,7 +123,7 @@ app.post('/api', async (req, res) => {
                 });
             }
         }
-        console.log(result)
+        
         res.json(result);
     } catch (error) {
         console.error('Error fetching Swagger JSON:', error.message);
