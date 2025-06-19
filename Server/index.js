@@ -31,51 +31,44 @@ function ensureDummyImageExists() {
 app.post('/api', async (req, res) => {
     const { url } = req.body;
     try {
-        const swaggerResp = await axios.get(url);
-        const rawData = swaggerResp.data;
-        const openApi = await swaggerParser.dereference(rawData);
-        const baseURL = (openApi.schemes?.[0] || 'https') + '://' + openApi.host + (openApi.basePath || '');
-
-        // Object to store created resource IDs
-        const createdResources = {};
+        const rawSpec = (await axios.get(url)).data;
+        const openApi = await swaggerParser.dereference(rawSpec);
+        const baseURL = `${(openApi.schemes?.[0] || 'https')}://${openApi.host}${openApi.basePath || ''}`;
 
         const endpoints = [];
+        const pathIdStore = {}; // Save IDs from POST responses
 
         for (const pathKey in openApi.paths) {
             for (const method in openApi.paths[pathKey]) {
-                if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
-                    const fullUrl = `${baseURL}${pathKey}`;
-                    const methodData = openApi.paths[pathKey][method];
-                    const dummyParams = {};
-                    const consumes = methodData.consumes?.[0] || openApi.consumes?.[0] || 'application/json';
+                if (!['get', 'post', 'put', 'delete', 'patch'].includes(method)) continue;
 
-                    if (methodData.parameters) {
-                        for (const param of methodData.parameters) {
-                            if (param.schema) {
-                                dummyParams[param.name] = await jsfaker.generate(param.schema);
-                            } else if (param.type) {
-                                if (param.type === 'file' || param.format === 'binary') {
-                                    const imgPath = ensureDummyImageExists();
-                                    dummyParams[param.name] = fs.createReadStream(imgPath);
-                                } else {
-                                    const schema = { type: param.type };
-                                    if (param.enum) schema.enum = param.enum;
-                                    dummyParams[param.name] = await jsfaker.generate(schema);
-                                }
+                const methodData = openApi.paths[pathKey][method];
+                const consumes = methodData.consumes?.[0] || openApi.consumes?.[0] || 'application/json';
+                let fullUrl = `${baseURL}${pathKey}`;
+
+                const dummyParams = {};
+                if (methodData.parameters) {
+                    for (const param of methodData.parameters) {
+                        if (param.in === 'path') {
+                            const value = jsfaker.generate({ type: 'integer', minimum: 1, maximum: 99999999 });
+                            fullUrl = fullUrl.replace(`{${param.name}}`, value);
+                            pathIdStore[param.name] = value;
+                        } else if (param.in === 'body' && param.schema) {
+                            Object.assign(dummyParams, await jsfaker.generate(param.schema));
+                        } else if (param.in === 'formData') {
+                            if (param.type === 'file' || param.format === 'binary') {
+                                const imgPath = ensureDummyImageExists();
+                                dummyParams[param.name] = fs.createReadStream(imgPath);
                             } else {
-                                dummyParams[param.name] = "dummy";
+                                dummyParams[param.name] = jsfaker.generate({ type: param.type });
                             }
+                        } else {
+                            dummyParams[param.name] = jsfaker.generate({ type: param.type || 'string' });
                         }
                     }
-
-                    endpoints.push({
-                        method,
-                        pathKey,
-                        url: fullUrl,
-                        parameters: dummyParams,
-                        consumes
-                    });
                 }
+
+                endpoints.push({ method, url: fullUrl, parameters: dummyParams, consumes });
             }
         }
 
@@ -84,104 +77,46 @@ app.post('/api', async (req, res) => {
         for (const endpoint of endpoints) {
             try {
                 let response;
-                const { method, url, parameters, consumes, pathKey } = endpoint;
+                const { method, url, parameters, consumes } = endpoint;
 
-                // Replace path params like {petId}, {orderId}, {username} in URL with saved IDs or dummy values
-                let finalUrl = url.replace(/{([^}]+)}/g, (match, p1) => {
-                    // p1 is the param name without braces
-                    if (createdResources[p1]) {
-                        return createdResources[p1];
+                if (method === 'get') {
+                    response = await axios.get(url, { params: parameters });
+                } else if (consumes === 'multipart/form-data') {
+                    const form = new FormData();
+                    for (const key in parameters) {
+                        form.append(key, parameters[key]);
                     }
-                    // If parameter exists in parameters, use that, else fallback to a dummy number or string
-                    if (parameters[p1]) return parameters[p1];
-                    // Default dummy replacement: if param includes 'id', use a random positive number else 'dummy'
-                    if (p1.toLowerCase().includes('id')) return Math.floor(Math.random() * 1000000).toString();
-                    return 'dummy';
-                });
-
-                // Also update parameters keys if they hold path param placeholders
-                for (const key in parameters) {
-                    if (typeof parameters[key] === 'string' && parameters[key].startsWith('{') && parameters[key].endsWith('}')) {
-                        const paramName = parameters[key].slice(1, -1);
-                        if (createdResources[paramName]) {
-                            parameters[key] = createdResources[paramName];
-                        } else if (paramName.toLowerCase().includes('id')) {
-                            parameters[key] = Math.floor(Math.random() * 1000000).toString();
-                        } else {
-                            parameters[key] = 'dummy';
-                        }
-                    }
-                }
-
-                if (method === 'post' && pathKey === '/store/order') {
-                    // POST store order: capture created order ID
-                    response = await axios.post(finalUrl, parameters, {
-                        headers: { 'Content-Type': consumes }
+                    response = await axios({
+                        method,
+                        url,
+                        data: form,
+                        headers: form.getHeaders()
                     });
-                    if (response.data && response.data.id) {
-                        createdResources['orderId'] = response.data.id.toString();
-                    } else if (parameters.id) {
-                        createdResources['orderId'] = parameters.id.toString();
-                    }
-                } else if (method === 'post' && pathKey === '/pet') {
-                    // POST pet: capture petId
-                    response = await axios.post(finalUrl, parameters, {
-                        headers: { 'Content-Type': consumes }
-                    });
-                    if (response.data && response.data.id) {
-                        createdResources['petId'] = response.data.id.toString();
-                    } else if (parameters.id) {
-                        createdResources['petId'] = parameters.id.toString();
-                    }
-                } else if (method === 'post' && pathKey === '/user') {
-                    // POST user: capture username if returned or from parameters
-                    response = await axios.post(finalUrl, parameters, {
-                        headers: { 'Content-Type': consumes }
-                    });
-                    if (response.data && response.data.username) {
-                        createdResources['username'] = response.data.username;
-                    } else if (parameters.username) {
-                        createdResources['username'] = parameters.username;
-                    }
                 } else {
-                    // Other requests: normal handling
-                    if (method === 'get') {
-                        response = await axios.get(finalUrl, { params: parameters });
-                    } else {
-                        if (consumes === 'multipart/form-data') {
-                            const form = new FormData();
-                            for (const key in parameters) {
-                                form.append(key, parameters[key]);
-                            }
-                            response = await axios({
-                                method,
-                                url: finalUrl,
-                                data: form,
-                                headers: form.getHeaders()
-                            });
-                        } else {
-                            response = await axios({
-                                method,
-                                url: finalUrl,
-                                data: parameters,
-                                headers: { 'Content-Type': consumes }
-                            });
-                        }
-                    }
+                    response = await axios({
+                        method,
+                        url,
+                        data: parameters,
+                        headers: { 'Content-Type': consumes }
+                    });
                 }
 
                 result.push({
                     method,
-                    url: finalUrl,
-                    parameters: Object.fromEntries(
-                        Object.entries(parameters).map(([k, v]) =>
-                            typeof v === 'object' && v.path
-                                ? [k, `file: ${path.basename(v.path)}`]
-                                : [k, v]
-                        )
-                    ),
+                    url,
+                    parameters: Object.fromEntries(Object.entries(parameters).map(([k, v]) =>
+                        typeof v === 'object' && v.path ? [k, `file: ${path.basename(v.path)}`] : [k, v]
+                    )),
                     response: response.data
                 });
+
+                // Save ID for path use in subsequent calls (e.g., POST returns a petId)
+                const id = response.data?.id || response.data?.petId || response.data?.orderId || response.data?.username;
+                if (id) {
+                    pathIdStore['petId'] = id;
+                    pathIdStore['orderId'] = id;
+                    pathIdStore['username'] = id;
+                }
             } catch (error) {
                 result.push({
                     method: endpoint.method,
