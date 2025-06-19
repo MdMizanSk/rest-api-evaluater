@@ -29,8 +29,8 @@ function ensureDummyImageExists() {
 }
 
 app.post('/api', async (req, res) => {
-    const url="https://petstore.swagger.io/v2/swagger.json"; // For testing, you can replace this with req.body.url
-    // const { url } = req.body;
+    
+    const { url } = req.body;
     try {
         const promise = await axios.get(url);
         const rawData = promise.data;
