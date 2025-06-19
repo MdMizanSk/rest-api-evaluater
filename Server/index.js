@@ -28,43 +28,55 @@ function ensureDummyImageExists() {
     return dummyImagePath;
 }
 
+// Replace path params like {petId} with dummy values
+function fillPathParams(pathTemplate, parameters) {
+    return pathTemplate.replace(/{([^}]+)}/g, (_, paramName) => {
+        return parameters[paramName] || '1'; // fallback if not present
+    });
+}
+
 app.post('/api', async (req, res) => {
-    
     const { url } = req.body;
+
     try {
         const promise = await axios.get(url);
         const rawData = promise.data;
         const openApi = await swagerParser.dereference(rawData);
-        const baseURL = (openApi.schemes?.[0] || 'https') + '://' + openApi.host + openApi.basePath;
+        const baseURL =
+            openApi.servers?.[0]?.url ||
+            ((openApi.schemes?.[0] || 'https') + '://' + openApi.host + openApi.basePath);
 
         const endpoints = [];
 
         for (const pathKey in openApi.paths) {
             for (const method in openApi.paths[pathKey]) {
                 if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
-                    const fullUrl = `${baseURL}${pathKey}`;
                     const methodData = openApi.paths[pathKey][method];
                     const dummyParams = {};
                     const consumes = methodData.consumes?.[0] || openApi.consumes?.[0] || 'application/json';
 
                     if (methodData.parameters) {
                         for (const param of methodData.parameters) {
+                            const name = param.name;
                             if (param.schema) {
-                                dummyParams[param.name] = await jsfaker.generate(param.schema);
+                                dummyParams[name] = await jsfaker.generate(param.schema);
                             } else if (param.type) {
                                 if (param.type === 'file' || param.format === 'binary') {
                                     const imgPath = ensureDummyImageExists();
-                                    dummyParams[param.name] = fs.createReadStream(imgPath);
+                                    dummyParams[name] = fs.createReadStream(imgPath);
                                 } else {
                                     const schema = { type: param.type };
                                     if (param.enum) schema.enum = param.enum;
-                                    dummyParams[param.name] = await jsfaker.generate(schema);
+                                    dummyParams[name] = await jsfaker.generate(schema);
                                 }
                             } else {
-                                dummyParams[param.name] = "dummy";
+                                dummyParams[name] = 'dummy';
                             }
                         }
                     }
+
+                    const fullPath = fillPathParams(pathKey, dummyParams);
+                    const fullUrl = `${baseURL}${fullPath}`;
 
                     endpoints.push({
                         method,
@@ -79,10 +91,11 @@ app.post('/api', async (req, res) => {
         const result = [];
 
         for (const endpoint of endpoints) {
+            const { method, url, parameters, consumes } = endpoint;
             try {
                 let response;
-                const { method, url, parameters, consumes } = endpoint;
 
+                console.log(`➡️ [${method.toUpperCase()}] ${url}`);
                 if (method === 'get') {
                     response = await axios.get(url, { params: parameters });
                 } else {
@@ -113,24 +126,27 @@ app.post('/api', async (req, res) => {
                     parameters: Object.fromEntries(Object.entries(parameters).map(([k, v]) =>
                         typeof v === 'object' && v.path ? [k, `file: ${path.basename(v.path)}`] : [k, v]
                     )),
+                    status: response.status,
                     response: response.data
                 });
             } catch (error) {
                 result.push({
-                    method: endpoint.method,
-                    url: endpoint.url,
+                    method,
+                    url,
+                    parameters,
+                    status: error.response?.status || 500,
                     error: error.response?.data || error.message
                 });
             }
         }
-        
+
         res.json(result);
     } catch (error) {
-        console.error('Error fetching Swagger JSON:', error.message);
+        console.error('❌ Error parsing Swagger/OpenAPI:', error.message);
         res.status(500).json({ error: 'Failed to process OpenAPI spec.' });
     }
 });
 
 app.listen(port, host, () => {
-    console.log(`Server is running on http://${host}:${port}`);
+    console.log(`🚀 Server is running on http://${host}:${port}`);
 });
