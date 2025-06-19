@@ -1,7 +1,12 @@
 import React from 'react';
 
 const Response = ({ logs }) => {
-    console.log("Logs:", logs);
+  console.log("Logs:", logs);
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    return <div className="response-box">No data to display.</div>;
+  }
+
   return (
     <div className='response-box'>
       <table>
@@ -10,29 +15,29 @@ const Response = ({ logs }) => {
             <th>Method</th>
             <th>URL</th>
             <th>Parameters</th>
-            <th>Response</th>
+            <th>Response/Error</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log, index) => (
             <tr key={index}>
-              <td>{log.method}</td>
-              <td>{log.url}</td>
+              <td>{log.method?.toUpperCase() || '—'}</td>
+              <td>{log.url || '—'}</td>
               <td>
                 <pre>
                   {log.parameters
-                    ? JSON.stringify(log.parameters, null, 2)
+                    ? safeStringify(log.parameters)
                     : '—'}
                 </pre>
               </td>
               <td>
                 <pre>
                   {log.response
-                    ? JSON.stringify(log.response, null, 2)
+                    ? safeStringify(log.response)
                     : log.error
                     ? typeof log.error === 'object'
-                      ? JSON.stringify(log.error, null, 2)
-                      : log.error
+                      ? safeStringify(log.error)
+                      : String(log.error)
                     : '—'}
                 </pre>
               </td>
@@ -43,5 +48,14 @@ const Response = ({ logs }) => {
     </div>
   );
 };
+
+// 🔒 Helper to safely stringify
+function safeStringify(data) {
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch (e) {
+    return 'Could not stringify data';
+  }
+}
 
 export default Response;
