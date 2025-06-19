@@ -59,8 +59,25 @@ app.post('/api', async (req, res) => {
 
           if (methodData.parameters) {
             for (const param of methodData.parameters) {
-              if (param.schema) {
-                dummyParams[param.name] = await jsfaker.generate(param.schema);
+              if (pathKey === '/user/createWithList' && param.name === 'body') {
+                dummyParams[param.name] = [
+                  {
+                    id: 1,
+                    username: 'testuser',
+                    firstName: 'Test',
+                    lastName: 'User',
+                    email: 'test@example.com',
+                    password: 'password',
+                    phone: '1234567890',
+                    userStatus: 1
+                  }
+                ];
+              } else if (param.schema) {
+                if (param.schema.type === 'array') {
+                  dummyParams[param.name] = [await jsfaker.generate(param.schema.items)];
+                } else {
+                  dummyParams[param.name] = await jsfaker.generate(param.schema);
+                }
               } else if (param.type) {
                 if (param.type === 'file' || param.format === 'binary') {
                   const imgPath = ensureDummyImageExists();
@@ -102,7 +119,6 @@ app.post('/api', async (req, res) => {
           }
         }
 
-        // Save important IDs for reuse
         if (url.includes('/pet') && response.data && response.data.id) idStore.petId = response.data.id;
         if (url.includes('/store/order') && response.data && response.data.id) idStore.orderId = response.data.id;
         if (url.includes('/user') && response.data && parameters.username) idStore.username = parameters.username;
