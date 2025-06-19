@@ -10,34 +10,34 @@ function App() {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
 
-  // ✅ Replace this URL with your deployed backend API URL
   const API_BASE_URL = 'https://rest-api-evaluater-server.onrender.com/api';
 
   const handleUrlSubmit = async (swaggerUrl) => {
     try {
       setError('');
       setLogs([]);
-
-      const response = await axios.post(API_BASE_URL, {
-        url: swaggerUrl,
-      });
-
+      const response = await axios.post(API_BASE_URL, { url: swaggerUrl });
       setLogs(response.data);
-    } catch (error) {
-      console.error('Error submitting URL:', error);
-      setError(error.response?.data?.error || error.message);
+    } catch (err) {
+      console.error('Request failed:', err);
+      setError(err.message || 'Something went wrong.');
     }
   };
 
-  return (
-    <div className='container'>
-      <Header />
-      <InputBox onSubmit={handleUrlSubmit} />
-      {error && <div className="error">Error: {error}</div>}
-      <LogBox logs={logs} />
-      <Response logs={logs} />
-    </div>
-  );
+  try {
+    return (
+      <div className="container">
+        <Header />
+        <InputBox onSubmit={handleUrlSubmit} />
+        {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+        <LogBox logs={logs} />
+        <Response logs={logs} />
+      </div>
+    );
+  } catch (e) {
+    console.error('Render crash:', e);
+    return <div>❌ A component crashed: {e.message}</div>;
+  }
 }
 
 export default App;
