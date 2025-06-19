@@ -18,24 +18,22 @@ const Response = ({ logs }) => {
               <td>{log.method}</td>
               <td>{log.url}</td>
               <td>
-                {log.parameters ? (
-                  <pre>{JSON.stringify(log.parameters, null, 2)}</pre>
-                ) : (
-                  '—'
-                )}
+                <pre>
+                  {log.parameters
+                    ? JSON.stringify(log.parameters, null, 2)
+                    : '—'}
+                </pre>
               </td>
               <td>
-                {log.response ? (
-                  <pre>{JSON.stringify(log.response, null, 2)}</pre>
-                ) : log.error ? (
-                  typeof log.error === 'object' ? (
-                    <pre>{JSON.stringify(log.error, null, 2)}</pre>
-                  ) : (
-                    log.error
-                  )
-                ) : (
-                  '—'
-                )}
+                <pre>
+                  {log.response
+                    ? JSON.stringify(log.response, null, 2)
+                    : log.error
+                    ? typeof log.error === 'object'
+                      ? JSON.stringify(log.error, null, 2)
+                      : log.error
+                    : '—'}
+                </pre>
               </td>
             </tr>
           ))}
