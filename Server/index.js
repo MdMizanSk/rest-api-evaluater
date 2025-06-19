@@ -42,6 +42,8 @@ app.post('/api', async (req, res) => {
         const promise = await axios.get(url);
         const rawData = promise.data;
         const openApi = await swagerParser.dereference(rawData);
+
+        // Get base URL
         const baseURL =
             openApi.servers?.[0]?.url ||
             ((openApi.schemes?.[0] || 'https') + '://' + openApi.host + openApi.basePath);
@@ -52,12 +54,16 @@ app.post('/api', async (req, res) => {
             for (const method in openApi.paths[pathKey]) {
                 if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
                     const methodData = openApi.paths[pathKey][method];
+
+                    // Separate path parameters and others
                     const dummyParams = {};
                     const consumes = methodData.consumes?.[0] || openApi.consumes?.[0] || 'application/json';
 
                     if (methodData.parameters) {
                         for (const param of methodData.parameters) {
                             const name = param.name;
+
+                            // Generate dummy value
                             if (param.schema) {
                                 dummyParams[name] = await jsfaker.generate(param.schema);
                             } else if (param.type) {
@@ -75,7 +81,12 @@ app.post('/api', async (req, res) => {
                         }
                     }
 
-                    const fullPath = fillPathParams(pathKey, dummyParams);
+                    // Replace path params placeholders with dummy values
+                    const fullPath = pathKey.replace(/{([^}]+)}/g, (_, p1) => {
+                        // Use dummy param if exists, else '1'
+                        return dummyParams[p1] !== undefined ? dummyParams[p1] : '1';
+                    });
+
                     const fullUrl = `${baseURL}${fullPath}`;
 
                     endpoints.push({
@@ -95,14 +106,24 @@ app.post('/api', async (req, res) => {
             try {
                 let response;
 
-                console.log(`➡️ [${method.toUpperCase()}] ${url}`);
                 if (method === 'get') {
-                    response = await axios.get(url, { params: parameters });
+                    // For get, pass non-path params as query
+                    const queryParams = {};
+                    // Remove path params from query params
+                    for (const [key, val] of Object.entries(parameters)) {
+                        if (!url.includes(val)) {
+                            queryParams[key] = val;
+                        }
+                    }
+                    response = await axios.get(url, { params: queryParams });
                 } else {
                     if (consumes === 'multipart/form-data') {
                         const form = new FormData();
                         for (const key in parameters) {
-                            form.append(key, parameters[key]);
+                            // skip path params in form data (already in URL)
+                            if (!url.includes(parameters[key])) {
+                                form.append(key, parameters[key]);
+                            }
                         }
                         response = await axios({
                             method,
@@ -111,10 +132,18 @@ app.post('/api', async (req, res) => {
                             headers: form.getHeaders()
                         });
                     } else {
+                        // For other methods
+                        // Remove path params from body
+                        const bodyParams = {};
+                        for (const [key, val] of Object.entries(parameters)) {
+                            if (!url.includes(val)) {
+                                bodyParams[key] = val;
+                            }
+                        }
                         response = await axios({
                             method,
                             url,
-                            data: parameters,
+                            data: bodyParams,
                             headers: { 'Content-Type': consumes }
                         });
                     }
@@ -145,8 +174,4 @@ app.post('/api', async (req, res) => {
         console.error('❌ Error parsing Swagger/OpenAPI:', error.message);
         res.status(500).json({ error: 'Failed to process OpenAPI spec.' });
     }
-});
-
-app.listen(port, host, () => {
-    console.log(`🚀 Server is running on http://${host}:${port}`);
 });
