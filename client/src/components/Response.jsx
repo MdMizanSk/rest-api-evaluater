@@ -1,6 +1,7 @@
 import React from 'react';
 
 const Response = ({ logs }) => {
+    console.log("Logs:", logs);
   return (
     <div className='response-box'>
       <table>
